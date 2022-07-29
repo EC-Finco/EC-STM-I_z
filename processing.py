@@ -6,41 +6,87 @@ from scipy.ndimage import uniform_filter1d
 from scipy.signal import find_peaks, peak_prominences, peak_widths
 
 
-def preproc(path_in, file_input):
+def preproc_asls(path_in, file_input, export):
     path = path_in + "/" + file_input  # creates path to open files
     # imports file into dataframe and creates dataframe for
     spectra = pd.read_csv(path, delimiter=" ", header=13, names=["Position", "Current"], engine='python', skipfooter=1)
-    peaks = pd.DataFrame()
     # module to crop saturated currents
     maxcurrent = np.amax(spectra.Current)
     spectra = spectra[spectra.Current < maxcurrent]  # to rethink
     current = uniform_filter1d(spectra.Current, 10)  # smoothing
-    baseasls = pybaselines.whittaker.asls(current, lam=10 ** 4, p=0.02)[0]  # baseline calculation with asls
+    baseasls = pybaselines.whittaker.asls(current, lam=10 ** 6, p=0.02)[0]  # baseline calculation with asls
     residuals = current - baseasls  # residual calculation
+    residuals = residuals[spectra.Current < maxcurrent]
     spectra['Residuals'] = residuals
-    # peak finding
-    peak, _ = find_peaks(residuals, prominence=0.2)  # collect the indices of peaks with a minimum prominence of 0.2
-    peakpos = spectra.Position[peak]
-    # peak validation
-    prominences = peak_prominences(residuals, peak)[0]
-    widths = peak_widths(residuals, peak)[0]  # width in number of points
-    density = np.amax(spectra.Position) / len(spectra.Position)
-    widths = widths * density  # width in nm
-    heights = peak_widths(residuals, peak)[1]
-    peaks['Position (nm)'] = peakpos
-    peaks['Prominence'] = np.transpose(prominences)
-    peaks['Width (nm)'] = np.transpose(widths)
-    peaks['Height (nA)'] = np.transpose(heights)
+    spectra['Baseline'] = baseasls
+    plotting(spectra, file_input)
+    peaks = peak_extraction(spectra)
+    if export == 'y':
+        exporter(path_in, file_input, spectra, peaks)
+    return spectra, peaks
+
+
+def preproc_derpsalsa(path_in, file_input, export):
+    path = path_in + "/" + file_input  # creates path to open files
+    # imports file into dataframe and creates dataframe for
+    spectra = pd.read_csv(path, delimiter=" ", header=13, names=["Position", "Current"], engine='python', skipfooter=1)
+    # module to crop saturated currents
+    maxcurrent = np.amax(spectra.Current)
+    spectra = spectra[spectra.Current < maxcurrent]  # to rethink
+    current = uniform_filter1d(spectra.Current, 10)  # smoothing
+    basederpsalsa = pybaselines.whittaker.derpsalsa(current, lam=2*10**3, p=0.002)[0]
+    # baseline calculation with derpsalsa
+    residuals = current - basederpsalsa  # residual calculation
+    residuals = residuals[spectra.Current < maxcurrent]  # residual cropping
+    index = []
+    l = len(residuals)
+    for i in range(l):
+        index.append(str(i+1))
+    spectra['Residuals'] = residuals
+    spectra['Baseline'] = basederpsalsa
+    plotting(spectra, file_input)
+    spectra.index = index
+    peaks = peak_extraction(spectra)
+    if export == 'y':
+        exporter(path_in, file_input, spectra, peaks)
+    return spectra, peaks
+
+
+def plotting(spectra, file_input):
     plt.figure()
     plt.plot(spectra.Position, spectra.Current)
     plt.plot(spectra.Position, spectra.Residuals)
-    plt.plot(spectra.Position, baseasls)
+    plt.plot(spectra.Position, spectra.Baseline)
     plt.title(file_input)
     plt.xlabel('Position / nm')
     plt.ylabel('Current / nA')
     plt.show()
+
+
+def peak_extraction(spectra):
+    peaks = pd.DataFrame()
+    # peak finding
+    peaklist, _ = find_peaks(spectra.Residuals, prominence=0.5, distance=20)
+    # collect the indices of peaks with a minimum prominence of 0.5 and minimum distance of 20 points
+    peak = np.array(peaklist, dtype=int)  # converting list into array
+    # print(peak)
+    peakpos = spectra.Position[peak]
+    # peak validation
+    prominences = peak_prominences(spectra.Residuals, peak)[0]
+    widths = peak_widths(spectra.Residuals, peak)[0]  # width in number of points
+    density = np.amax(spectra.Position) / len(spectra.Position)
+    widths = widths * density  # width in nm
+    heights = peak_widths(spectra.Residuals, peak)[1]
+    peaks['Position (nm)'] = peakpos
+    peaks['Prominence'] = np.transpose(prominences)
+    peaks['Width (nm)'] = np.transpose(widths)
+    peaks['Height (nA)'] = np.transpose(heights)
+    return peaks
+
+
+def exporter(path_in, file_input, spectra, peaks):
     # data export: 1) corrected spectra
-    headerdata: list[str] = ["Position (nm)", "Current (nA)", "Residuals (nA)"]
+    headerdata: list[str] = ["Position (nm)", "Current (nA)", "Residuals (nA)", "Baseline (nA)"]
     path_spectra = path_in + "/preprocessed spectra/"
     path_out = path_spectra + file_input.replace(".ts", "-spectra.txt")
     with open(path_out, 'a') as f:
@@ -53,4 +99,5 @@ def preproc(path_in, file_input):
     with open(path_out, 'a') as f:
         df_peaks = peaks.to_string(header=headerpeaks, index=False)
         f.write(df_peaks)
-    return spectra, peaks
+    path = path_in + "/plots/" + file_input.replace(".ts", "-plot.jpg")  # path for plots
+    plt.savefig(path, format='jpg')  # save figure in jpg format

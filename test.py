@@ -64,8 +64,9 @@ residualimod3 = current - baseimod3
 spectra['Residuals'] = residualimod3
 residualpen_poly = current - basepen_poly
 # peak finding
-peak, _ = find_peaks(residualimod3, prominence=0.5)  # collect the indices of peaks with a minimum prominence of 0.2
+peak, params = find_peaks(residualimod3, prominence=0.5)  # collect the indices of peaks with a minimum prominence of 0.2
 peakpos = spectra.Position[peak]
+print(params)
 # peak validation
 prominences = peak_prominences(residualimod3, peak)[0]
 widths = peak_widths(residualimod3, peak)[0]  # width in number of points
@@ -82,7 +83,7 @@ plt.plot(spectra.Position, residualimod3, label="res-imod3")
 plt.plot(spectra.Position, residualderp, label="res-derp")
 plt.plot(spectra.Position, residualpen_poly, label="res-pen_poly")
 plt.plot(spectra.Position, baseimod3, label="imod3")
-plt.plot(spectra.Position, basederp, label="derp lam=2E3, p=0.001")
+plt.plot(spectra.Position, basederp, label="derp lam=4E3, p=0.001")
 plt.plot(spectra.Position, basepen_poly, label="pen_poly")
 plt.plot(peakpos, residualimod3[peak], "x")
 plt.legend()
@@ -90,3 +91,4 @@ plt.title(file_input)
 plt.xlabel('Position / nm')
 plt.ylabel('Current / nA')
 plt.show()
+

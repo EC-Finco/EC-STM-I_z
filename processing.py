@@ -44,22 +44,26 @@ def preproc_derpsalsa(path_in, file_input, export):
         index.append(str(i+1))
     spectra['Residuals'] = residuals
     spectra['Baseline'] = basederpsalsa
-    plotting(spectra, file_input)
     spectra.index = index
     peaks = peak_extraction(spectra)
+    plotting(spectra, peaks, file_input, path_in)
     if export == 'y':
         exporter(path_in, file_input, spectra, peaks)
     return spectra, peaks
 
 
-def plotting(spectra, file_input):
+def plotting(spectra, peaks, file_input, path_in):
     plt.figure()
-    plt.plot(spectra.Position, spectra.Current)
+    plt.plot(spectra.Position, spectra.Current, label="meau")
     plt.plot(spectra.Position, spectra.Residuals)
     plt.plot(spectra.Position, spectra.Baseline)
+    plt.plot(peaks.Position, spectra.Residuals[peaks.Index], "bo")
+    print(peaks.Position, peaks.Index)
     plt.title(file_input)
     plt.xlabel('Position / nm')
     plt.ylabel('Current / nA')
+    path = path_in + "/plots/" + file_input.replace(".ts", "-plot.jpg")  # path for plots
+    plt.savefig(path, format='jpg')  # save figure in jpg format
     plt.show()
 
 
@@ -68,19 +72,20 @@ def peak_extraction(spectra):
     # peak finding
     peaklist, _ = find_peaks(spectra.Residuals, prominence=0.5, distance=20)
     # collect the indices of peaks with a minimum prominence of 0.5 and minimum distance of 20 points
-    peak = np.array(peaklist, dtype=int)  # converting list into array
+    peak_index = np.array(peaklist, dtype=int)  # converting list into array
     # print(peak)
-    peakpos = spectra.Position[peak]
+    peakpos = spectra.Position[peak_index]
     # peak validation
-    prominences = peak_prominences(spectra.Residuals, peak)[0]
-    widths = peak_widths(spectra.Residuals, peak)[0]  # width in number of points
+    prominences = peak_prominences(spectra.Residuals, peak_index)[0]
+    widths = peak_widths(spectra.Residuals, peak_index)[0]  # width in number of points
     density = np.amax(spectra.Position) / len(spectra.Position)
     widths = widths * density  # width in nm
-    heights = peak_widths(spectra.Residuals, peak)[1]
-    peaks['Position (nm)'] = peakpos
+    heights = peak_widths(spectra.Residuals, peak_index)[1]
+    peaks['Index'] = peak_index
+    peaks['Position'] = np.array(peakpos)
     peaks['Prominence'] = np.transpose(prominences)
-    peaks['Width (nm)'] = np.transpose(widths)
-    peaks['Height (nA)'] = np.transpose(heights)
+    peaks['Width'] = np.transpose(widths)
+    peaks['Height'] = np.transpose(heights)
     return peaks
 
 
@@ -93,11 +98,9 @@ def exporter(path_in, file_input, spectra, peaks):
         df_spectra = spectra.to_string(header=headerdata, index=False)
         f.write(df_spectra)
     # data export: 2)peak features
-    headerpeaks = ["Position (nm)", "Prominence", "Width", "Height"]
+    headerpeaks = ["Index", "Position (nm)", "Prominence", "Width", "Height"]
     path_peaks = path_in + "/peak data/"
     path_out = path_peaks + file_input.replace(".ts", "-peaks.txt")
     with open(path_out, 'a') as f:
         df_peaks = peaks.to_string(header=headerpeaks, index=False)
         f.write(df_peaks)
-    path = path_in + "/plots/" + file_input.replace(".ts", "-plot.jpg")  # path for plots
-    plt.savefig(path, format='jpg')  # save figure in jpg format

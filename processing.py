@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -19,7 +21,7 @@ def preproc_asls(path_in, file_input, export):
     residuals = residuals[spectra.Current < maxcurrent]
     spectra['Residuals'] = residuals
     spectra['Baseline'] = baseasls
-    plotting(spectra, file_input)
+    # plotting(spectra, file_input, export)
     peaks = peak_extraction(spectra)
     if export == 'y':
         exporter(path_in, file_input, spectra, peaks)
@@ -33,8 +35,8 @@ def preproc_derpsalsa(path_in, file_input, export):
     # module to crop saturated currents
     maxcurrent = np.amax(spectra.Current)
     spectra = spectra[spectra.Current < maxcurrent]  # to rethink
-    current = uniform_filter1d(spectra.Current, 10)  # smoothing
-    basederpsalsa = pybaselines.whittaker.derpsalsa(current, lam=2*10**3, p=0.002)[0]
+    current = uniform_filter1d(spectra.Current, 20)  # smoothing
+    basederpsalsa = pybaselines.whittaker.derpsalsa(current, lam=2000, p=0.002)[0]
     # baseline calculation with derpsalsa
     residuals = current - basederpsalsa  # residual calculation
     residuals = residuals[spectra.Current < maxcurrent]  # residual cropping
@@ -46,24 +48,24 @@ def preproc_derpsalsa(path_in, file_input, export):
     spectra['Baseline'] = basederpsalsa
     spectra.index = index
     peaks = peak_extraction(spectra)
-    plotting(spectra, peaks, file_input, path_in)
+    plotting(spectra, peaks, file_input, path_in, export)
     if export == 'y':
         exporter(path_in, file_input, spectra, peaks)
     return spectra, peaks
 
 
-def plotting(spectra, peaks, file_input, path_in):
+def plotting(spectra, peaks, file_input, path_in, export):
     plt.figure()
-    plt.plot(spectra.Position, spectra.Current, label="meau")
-    plt.plot(spectra.Position, spectra.Residuals)
-    plt.plot(spectra.Position, spectra.Baseline)
-    plt.plot(peaks.Position, spectra.Residuals[peaks.Index], "bo")
-    print(peaks.Position, peaks.Index)
+    plt.plot(spectra.Position, spectra.Current, label="measure")
+    plt.plot(spectra.Position, spectra.Residuals, label="residual")
+    plt.plot(spectra.Position, spectra.Baseline, label="baseline")
+    plt.plot(peaks.Position, spectra.Residuals[peaks.Index], "bo", label="peaks")
     plt.title(file_input)
     plt.xlabel('Position / nm')
     plt.ylabel('Current / nA')
-    path = path_in + "/plots/" + file_input.replace(".ts", "-plot.jpg")  # path for plots
-    plt.savefig(path, format='jpg')  # save figure in jpg format
+    if export == 'y':
+        path = path_in + "/plots/" + file_input.replace(".ts", "-plot.jpg")  # path for plots
+        plt.savefig(path, format='jpg')  # save figure in jpg format
     plt.show()
 
 
@@ -99,8 +101,31 @@ def exporter(path_in, file_input, spectra, peaks):
         f.write(df_spectra)
     # data export: 2)peak features
     headerpeaks = ["Index", "Position (nm)", "Prominence", "Width", "Height"]
-    path_peaks = path_in + "/peak data/"
-    path_out = path_peaks + file_input.replace(".ts", "-peaks.txt")
-    with open(path_out, 'a') as f:
-        df_peaks = peaks.to_string(header=headerpeaks, index=False)
-        f.write(df_peaks)
+    if not peaks.empty:
+        path_peaks = path_in + "/peak data/"
+        path_out = path_peaks + file_input.replace(".ts", "-peaks.txt")
+        peaks.to_csv(path_out, header=True, sep="\t", index=False)
+
+#####       FUNCTIONS FOR HISTOGRAM         #####
+def proc_hist(files, export="y"):
+    path = os.getcwd()
+    chunk = pd.DataFrame()
+    peaks = pd.DataFrame()
+    chunks = []
+    for i in files:
+        chunk = pd.read_csv(i, sep='\t', header=0, engine='python')
+        chunks.append(chunk)
+    peaks = pd.concat(chunks, ignore_index=True)
+    print(peaks)
+    plt.figure()
+    plt.hist(peaks.Position, range=[0, 2], label="unweighted")
+    plt.hist(peaks.Position, range=[0, 2], weights=peaks.Prominence, label="prominence-weighted")
+    plt.title("Histogram of peak position frequency")
+    plt.xlabel('Position / nm')
+    plt.ylabel('Counts')
+    if export == 'y':
+        path = path + "/frequency histogram.jpg"  # path for plots
+        plt.savefig(path, format='jpg')  # save figure in jpg format
+    plt.show()
+    path = os.getcwd() + "/peaks list.txt"
+    peaks.to_csv(path, sep="\t")

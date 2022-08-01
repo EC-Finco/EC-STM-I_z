@@ -35,7 +35,7 @@ def preproc_asls(path_in, file_input, export):
     maxcurrent = np.amax(spectra.Current)
     spectra = spectra[spectra.Current < maxcurrent]  # to rethink
     current = uniform_filter1d(spectra.Current, 10)  # smoothing
-    baseasls = pybaselines.whittaker.asls(current, lam=10 ** 6, p=0.02)[0]  # baseline calculation with asls
+    baseasls = pybaselines.whittaker.asls(current, lam=10 ** 3, p=0.02)[0]  # baseline calculation with asls
     residuals = current - baseasls  # residual calculation
     residuals = residuals[spectra.Current < maxcurrent]
     spectra['Residuals'] = residuals
@@ -47,15 +47,22 @@ def preproc_asls(path_in, file_input, export):
     return spectra, peaks
 
 
-def preproc_derpsalsa(path_in, file_input, export):
+def preproc_derpsalsa(path_in, file_input, export, param=None):
+    if param.empty is True:
+        param.at[0, 'SmoothingWindow'] = 20
+        param.at[0, 'Lambda'] = 2000
+        param.at[0, 'p'] = 0.002
+    smooth_wind = int(param.SmoothingWindow[0])
+    lam = float(param.Lambda[0])
+    p = float(param.p[0])
     path = path_in + "/" + file_input  # creates path to open files
     # imports file into dataframe and creates dataframe for
     spectra = pd.read_csv(path, delimiter=" ", header=13, names=["Position", "Current"], engine='python', skipfooter=1)
     # module to crop saturated currents
     maxcurrent = np.amax(spectra.Current)
     spectra = spectra[spectra.Current < maxcurrent]  # to rethink
-    current = uniform_filter1d(spectra.Current, 20)  # smoothing
-    basederpsalsa = pybaselines.whittaker.derpsalsa(current, lam=2000, p=0.002)[0]
+    current = uniform_filter1d(spectra.Current, smooth_wind)  # smoothing
+    basederpsalsa = pybaselines.whittaker.derpsalsa(current, lam=lam, p=p)[0]
     # baseline calculation with derpsalsa
     residuals = current - basederpsalsa  # residual calculation
     residuals = residuals[spectra.Current < maxcurrent]  # residual cropping
@@ -112,30 +119,27 @@ def peak_extraction(spectra):
 
 def exporter(path_in, file_input, spectra, peaks):
     # data export: 1) corrected spectra
-    headerdata: list[str] = ["Position (nm)", "Current (nA)", "Residuals (nA)", "Baseline (nA)"]
     path_spectra = path_in + "/preprocessed spectra/"
     path_out = path_spectra + file_input.replace(".ts", "-spectra.txt")
-    with open(path_out, 'a') as f:
-        df_spectra = spectra.to_string(header=headerdata, index=False)
-        f.write(df_spectra)
+    spectra.to_csv(path_out, header=True, sep="\t", index=False)
     # data export: 2)peak features
-    headerpeaks = ["Index", "Position (nm)", "Prominence", "Width", "Height"]
     if not peaks.empty:
         path_peaks = path_in + "/peak data/"
         path_out = path_peaks + file_input.replace(".ts", "-peaks.txt")
         peaks.to_csv(path_out, header=True, sep="\t", index=False)
 
+
 #     FUNCTIONS FOR HISTOGRAM
 def proc_hist(files, export="n"):
     path = os.getcwd()
-    chunk = pd.DataFrame()
-    peaks = pd.DataFrame()
     chunks = []
     for i in files:
         chunk = pd.read_csv(i, sep='\t', header=0, engine='python')
         chunks.append(chunk)
     peaks = pd.concat(chunks, ignore_index=True)
-    print(peaks)
+    print("In total the number of found peaks is", len(peaks))
+    hist_peaks = pd.DataFrame()
+    max_peak = max(peaks.Position)
     plt.figure()
     plt.hist(peaks.Position, range=[0, 2], label="unweighted", alpha=0.5)
     plt.hist(peaks.Position, range=[0, 2], weights=peaks.Prominence, label="prominence-weighted", alpha=0.5)
@@ -147,6 +151,13 @@ def proc_hist(files, export="n"):
         path = path + "/frequency histogram.jpg"  # path for plots
         plt.savefig(path, format='jpg')  # save figure in jpg format
     plt.show()
+    hist_peaks['counts-unweigh'] = np.histogram(peaks.Position, bins=10, range=[0, max_peak])[0]
+    hist_peaks['counts-promin'] = np.histogram(peaks.Position, bins=10, range=[0, max_peak], weights=peaks.Prominence)[0]
+    hist_peaks['counts-height'] = np.histogram(peaks.Position, bins=10, range=[0, max_peak], weights=peaks.Height)[0]
+    bins = np.histogram(peaks.Position, bins=10, range=[0, max_peak])[1]
+    hist_peaks['bins'] = bins[0:-1]
     if export != 'n':
         path = os.getcwd() + "/peaks list.txt"
         peaks.to_csv(path, sep="\t")
+        path = os.getcwd() +"/histogram data.txt"
+        hist_peaks.to_csv(path, sep="\t", index=False)

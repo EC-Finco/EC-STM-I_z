@@ -146,6 +146,7 @@ def proc_hist(files, export="n"):
     if export != 'n':
         path = path + "/frequency histogram.jpg"  # path for plots
         plt.savefig(path, format='jpg')  # save figure in jpg format
+    plt.show()
+    if export != 'n':
         path = os.getcwd() + "/peaks list.txt"
         peaks.to_csv(path, sep="\t")
-    plt.show()

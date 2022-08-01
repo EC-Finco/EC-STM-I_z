@@ -7,6 +7,13 @@ import processing
 import paths
 
 
+def duplicates():
+    extension = 'ts'
+    # insert the path of the spectra
+    path_in = input("Type the path of spectra: ")
+    os.chdir(path_in)
+    tsresult = [i for i in glob.glob('*.{}'.format(extension))]
+    processing.duplicate_removal(path_in, tsresult)
 def spectra_analysis():
     # importing filenames
     extension = 'ts'
@@ -36,7 +43,7 @@ def spectra_analysis():
     return path_in, export, spectra, peaks
 
 
-def histogram(seq="no", par_dir="",export="y"):
+def histogram(seq="no", par_dir="", export="n"):
     if seq == "no":
         path_in = input("Paste path of found peaks:\n")
     else:
@@ -47,5 +54,5 @@ def histogram(seq="no", par_dir="",export="y"):
     path = path_in + "/*-peaks.txt"
     files = glob.glob(path, recursive=True)
     print("The peak files found in this folder are:\t", len(files))
-    processing.proc_hist(files, export=export)
+    processing.proc_hist(files, export)
 

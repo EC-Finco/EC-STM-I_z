@@ -56,12 +56,15 @@ import modes
 warnings.filterwarnings("ignore", ".*GUI is implemented.*")
 warnings.filterwarnings("ignore", ".*No labelled objects found.*")
 
-mode = input("Choose calculation method: S=Spectra analysis - H=Histogram plot - B=Both \n")
-if mode == 'S':
+mode = input("Choose calculation method: D=Duplicate removal S=Spectra analysis - H=Histogram plot - B=Both \n")
+if mode == 'D':
+    modes.duplicates()
+elif mode == 'S':
     modes.spectra_analysis()
 elif mode == 'H':
     modes.histogram()
 elif mode == 'B':
     path_in = modes.spectra_analysis()[0]
+    export = input("Should the histogram be exported?")
     seq = "yes"
-    modes.histogram(seq, path_in)
+    modes.histogram(seq, path_in, export)

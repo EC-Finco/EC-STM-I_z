@@ -6,6 +6,25 @@ import pandas as pd
 import pybaselines
 from scipy.ndimage import uniform_filter1d
 from scipy.signal import find_peaks, peak_prominences, peak_widths
+import hashlib
+from pathlib import Path
+
+
+def duplicate_removal(path_in, list_of_files):
+    unique_files = dict()
+    # Running a for loop on all the files
+    for file in list_of_files:
+        # Finding complete file path
+        file_path = Path(os.path.join(path_in, file))
+        # Converting all the content of
+        # our file into md5 hash.
+        hash_file = hashlib.md5(open(file_path, 'rb').read()).hexdigest()
+        # If file hash has already been added we'll simply delete that file
+        if hash_file not in unique_files:
+            unique_files[hash_file] = file_path
+        else:
+            os.remove(file_path)
+            print(f"{file} has been deleted")
 
 
 def preproc_asls(path_in, file_input, export):
@@ -106,8 +125,8 @@ def exporter(path_in, file_input, spectra, peaks):
         path_out = path_peaks + file_input.replace(".ts", "-peaks.txt")
         peaks.to_csv(path_out, header=True, sep="\t", index=False)
 
-#####       FUNCTIONS FOR HISTOGRAM         #####
-def proc_hist(files, export="y"):
+#     FUNCTIONS FOR HISTOGRAM
+def proc_hist(files, export="n"):
     path = os.getcwd()
     chunk = pd.DataFrame()
     peaks = pd.DataFrame()
@@ -118,14 +137,15 @@ def proc_hist(files, export="y"):
     peaks = pd.concat(chunks, ignore_index=True)
     print(peaks)
     plt.figure()
-    plt.hist(peaks.Position, range=[0, 2], label="unweighted")
-    plt.hist(peaks.Position, range=[0, 2], weights=peaks.Prominence, label="prominence-weighted")
+    plt.hist(peaks.Position, range=[0, 2], label="unweighted", alpha=0.5)
+    plt.hist(peaks.Position, range=[0, 2], weights=peaks.Prominence, label="prominence-weighted", alpha=0.5)
     plt.title("Histogram of peak position frequency")
     plt.xlabel('Position / nm')
     plt.ylabel('Counts')
-    if export == 'y':
+    plt.legend()
+    if export != 'n':
         path = path + "/frequency histogram.jpg"  # path for plots
         plt.savefig(path, format='jpg')  # save figure in jpg format
+        path = os.getcwd() + "/peaks list.txt"
+        peaks.to_csv(path, sep="\t")
     plt.show()
-    path = os.getcwd() + "/peaks list.txt"
-    peaks.to_csv(path, sep="\t")
